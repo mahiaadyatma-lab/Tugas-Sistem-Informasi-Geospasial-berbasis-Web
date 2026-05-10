@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>WebGIS OGC Services DIY</title>
+
+<!-- Leaflet CSS -->
+<link rel="stylesheet"
+href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<style>
+
+/* =========================================
+   BODY
+========================================= */
+
+body{
+    margin:0;
+    padding:0;
+    font-family:Arial, sans-serif;
+}
+
+/* =========================================
+   MAP
+========================================= */
+
+#map{
+    width:100%;
+    height:100vh;
+}
+
+/* =========================================
+   INFO PANEL
+========================================= */
+
+.info-panel{
+
+    position:absolute;
+
+    top:15px;
+    right:15px;
+
+    z-index:1000;
+
+    background:white;
+
+    width:300px;
+
+    padding:18px;
+
+    border-radius:12px;
+
+    box-shadow:0 0 15px rgba(0,0,0,0.3);
+}
+
+.info-panel h2{
+    margin-top:0;
+    color:#2c3e50;
+}
+
+/* =========================================
+   LEGENDA
+========================================= */
+
+.legend{
+    margin-top:15px;
+}
+
+.legend-item{
+    display:flex;
+    align-items:center;
+    margin-bottom:8px;
+}
+
+.legend-color{
+    width:18px;
+    height:18px;
+    margin-right:10px;
+    border:1px solid black;
+}
+
+.raster-color{
+    background:linear-gradient(
+        to right,
+        #2ecc71,
+        #f1c40f,
+        #e74c3c
+    );
+}
+
+.vector-color{
+    background:#3498db;
+}
+
+/* =========================================
+   JUDUL INFO
+========================================= */
+
+#detail h3{
+    margin-bottom:8px;
+    color:#34495e;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<!-- =====================================
+     PANEL INFORMASI
+===================================== -->
+
+<div class="info-panel">
+
+    <h2>WebGIS DIY</h2>
+
+    <p>
+        Visualisasi data raster dan vektor
+        menggunakan layanan OGC Services
+        berbasis GeoServer dan Leaflet.
+    </p>
+
+    <ul>
+        <li>WMS Raster DIY</li>
+        <li>WFS Kecamatan Sleman</li>
+        <li>Leaflet JS</li>
+    </ul>
+
+    <hr>
+
+    <div id="detail">
+
+        Klik wilayah kecamatan
+        untuk melihat informasi.
+
+    </div>
+
+    <!-- LEGENDA -->
+
+    <div class="legend">
+
+        <h3>Legenda</h3>
+
+        <div class="legend-item">
+
+            <div class="legend-color raster-color"></div>
+
+            <span>Raster DIY (WMS)</span>
+
+        </div>
+
+        <div class="legend-item">
+
+            <div class="legend-color vector-color"></div>
+
+            <span>Kecamatan Sleman (WFS)</span>
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- =====================================
+     MAP
+===================================== -->
+
+<div id="map"></div>
+
+<!-- =====================================
+     LEAFLET JS
+===================================== -->
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+
+// =========================================
+// 1. INISIALISASI MAP
+// =========================================
+
+var map = L.map('map').setView(
+    [-7.7956,110.3695],
+    11
+);
+
+// =========================================
+// 2. BASEMAP OPENSTREETMAP
+// =========================================
+
+var osm = L.tileLayer(
+'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+{
+    attribution:'© OpenStreetMap'
+}).addTo(map);
+
+// =========================================
+// 3. BASEMAP SATELLITE
+// =========================================
+
+var satellite = L.tileLayer(
+'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+{
+    attribution:'Tiles © Esri'
+});
+
+// =========================================
+// 4. WMS RASTER DIY
+// =========================================
+
+var rasterDIY = L.tileLayer.wms(
+'http://localhost:8080/geoserver/wms',
+{
+    layers:'DIY:Peta_Raster_DIY',
+
+    format:'image/png',
+
+    transparent:true,
+
+    attribution:'GeoServer WMS'
+}).addTo(map);
+
+// =========================================
+// 5. URL WFS
+// =========================================
+
+var wfsUrl =
+
+'http://localhost:8080/geoserver/ows?' +
+
+'service=WFS&' +
+
+'version=1.0.0&' +
+
+'request=GetFeature&' +
+
+'typeName=Kabupaten_Sleman:Kecamatan_Sleman&' +
+
+'outputFormat=application/json';
+
+// =========================================
+// 6. STYLE VECTOR
+// =========================================
+
+function styleKecamatan(feature){
+
+    return{
+
+        color:'#2980b9',
+
+        weight:2,
+
+        fillColor:'#3498db',
+
+        fillOpacity:0.35
+
+    };
+
+}
+
+// =========================================
+// 7. HIGHLIGHT FEATURE
+// =========================================
+
+function highlightFeature(e){
+
+    var layer = e.target;
+
+    layer.setStyle({
+
+        weight:3,
+
+        color:'#f1c40f',
+
+        fillOpacity:0.6
+
+    });
+
+}
+
+// =========================================
+// 8. RESET STYLE
+// =========================================
+
+function resetHighlight(e){
+
+    geojson.resetStyle(e.target);
+
+}
+
+// =========================================
+// 9. ZOOM TO FEATURE
+// =========================================
+
+function zoomToFeature(e){
+
+    map.fitBounds(
+        e.target.getBounds()
+    );
+
+}
+
+// =========================================
+// 10. INTERAKSI FITUR
+// =========================================
+
+function onEachFeature(feature, layer){
+
+    // TOOLTIP
+
+    layer.bindTooltip(
+
+        feature.properties.WADMKC ||
+        "Kecamatan"
+
+    );
+
+    // POPUP
+
+    layer.bindPopup(
+
+        "<b>Kecamatan:</b> " +
+        (feature.properties.WADMKC || "-") +
+
+        "<br><b>Kabupaten:</b> " +
+        (feature.properties.WADMKK || "-")
+
+    );
+
+    // PANEL INFORMASI
+
+    layer.on('click', function(){
+
+        document.getElementById(
+            'detail'
+        ).innerHTML =
+
+        "<h3>Informasi Wilayah</h3>" +
+
+        "<b>Kecamatan:</b> " +
+        (feature.properties.WADMKC || "-") +
+
+        "<br><b>Kabupaten:</b> " +
+        (feature.properties.WADMKK || "-");
+
+    });
+
+    // HOVER EFFECT
+
+    layer.on({
+
+        mouseover:highlightFeature,
+
+        mouseout:resetHighlight,
+
+        click:zoomToFeature
+
+    });
+
+}
+
+// =========================================
+// 11. LOAD WFS
+// =========================================
+
+var geojson;
+
+fetch(wfsUrl)
+
+.then(function(response){
+
+    return response.json();
+
+})
+
+.then(function(data){
+
+    console.log(data);
+
+    geojson = L.geoJSON(data,{
+
+        style:styleKecamatan,
+
+        onEachFeature:onEachFeature
+
+    }).addTo(map);
+
+})
+
+.catch(function(error){
+
+    console.log(
+        "Gagal mengambil data WFS"
+    );
+
+    console.log(error);
+
+});
+
+// =========================================
+// 12. LAYER CONTROL
+// =========================================
+
+var baseMaps = {
+
+    "OpenStreetMap":osm,
+
+    "Esri Satellite":satellite
+
+};
+
+var overlayMaps = {
+
+    "Raster DIY (WMS)":rasterDIY
+
+};
+
+L.control.layers(
+    baseMaps,
+    overlayMaps
+).addTo(map);
+
+// =========================================
+// 13. SCALE BAR
+// =========================================
+
+L.control.scale().addTo(map);
+
+// =========================================
+// 14. KOORDINAT MOUSE
+// =========================================
+
+map.on('mousemove', function(e){
+
+    console.log(
+
+        "Lat: " +
+        e.latlng.lat +
+
+        ", Lng: " +
+        e.latlng.lng
+
+    );
+
+});
+
+</script>
+
+</body>
+</html>
